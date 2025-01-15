@@ -3,6 +3,8 @@
 # Made into a class in case we want to make more than C code in the future
 # It would probably be better to make this a class anyway for organization anyway. 
 
+# TODO: call and access are being ignored for now
+
 class IRToCDecompiler:
     def __init__(self, function, types, libraries, external_vars):
         self.function = function
@@ -33,10 +35,14 @@ class IRToCDecompiler:
     def handle_tokens(self):
         c_code = []
         token_iter = iter(self.function.tokens)
+        # for token in token_iter:
+        #     print(token)
 
         for token in token_iter:
             if token == "if":
-                c_code.append(self.handle_if_else(token_iter))
+                if_block = self.handle_if_else(token_iter)
+                for line in if_block:
+                    c_code.append(line)
             elif token == "return":
                 c_code.append("return;")
             else:
@@ -45,26 +51,26 @@ class IRToCDecompiler:
         return c_code
 
     def handle_if_else(self, token_iter):
+        block = ["if " + next(token_iter)]
         condition = next(token_iter)  # This is assuming a single variable/literal (item)
         condition_var, _ = self.handle_variables(condition)
-        block = ["if ({}) {{".format(condition_var)]
+        block.append(condition_var + next(token_iter) + next(token_iter))
 
         while True:
 
             token = next(token_iter, None)
             if token is None:
                 break
-
-            print(token)
             if token == "else":
-                block.append("} else {")
+                block.append(token + next(token_iter))
+                #TODO: Handle anything actually in the else block
             elif token == "}":
-                block.append("}")
+                block.append(token)
                 break
             else:
                 block.append(self.handle_operations(token, token_iter))
 
-        return "\n".join(block)
+        return block
     
     def handle_operations(self, first_token, token_iter):
         left_var, _ = self.handle_variables(first_token)
