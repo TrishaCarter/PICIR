@@ -3,7 +3,8 @@
 # Made into a class in case we want to make more than C code in the future
 # It would probably be better to make this a class anyway for organization anyway. 
 
-# TODO: call and access are being ignored for now
+# TODO: call and access
+# TODO: variable initialization
 
 class IRToCDecompiler:
     def __init__(self, function, types, libraries, external_vars):
@@ -20,7 +21,14 @@ class IRToCDecompiler:
         c_code = [lib for lib in self.libraries]
 
         # Start of Function, arguments, name
+        # TODO: handle argument types
         input_vars = [f"{self.types[var]} var{var[1:]}" for var in self.function.input_variables]
+        # split each input var by space, use handle_variables on the first part of the split and keep the second part the same
+        for var in input_vars:
+            var.split(" ")
+            _, var_type = self.handle_variables(var[0])
+            var = f"{var_type} {var[1]}"
+
         c_code.append(f"void {self.function.name}({','.join(input_vars)}) {{")
 
         # Translate tokens to C statements
@@ -39,11 +47,14 @@ class IRToCDecompiler:
         #     print(token)
 
         for token in token_iter:
+            # TODO: "\n" and "\t" are not handlesd correctly
             if token == "if":
                 if_block = self.handle_if_else(token_iter)
                 for line in if_block:
                     c_code.append(line)
+            
             elif token == "return":
+                # this doesn't seem right
                 c_code.append("return;")
             else:
                 c_code.append(self.handle_operations(token, token_iter))
@@ -54,7 +65,7 @@ class IRToCDecompiler:
         block = ["if " + next(token_iter)]
         condition = next(token_iter)  # This is assuming a single variable/literal (item)
         condition_var, _ = self.handle_variables(condition)
-        block.append(condition_var + next(token_iter) + next(token_iter))
+        block[0] += condition_var + next(token_iter) + next(token_iter)
 
         while True:
 
@@ -73,9 +84,21 @@ class IRToCDecompiler:
         return block
     
     def handle_operations(self, first_token, token_iter):
-        left_var, _ = self.handle_variables(first_token)
+        left_var, left_var_type = self.handle_variables(first_token)
         operator = next(token_iter)
 
+        # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
+        # ref - reference of & (always has a 0 before it, where the 0 does not mean anything)
+        # . - structure/union access - probably wait for this one (will be difficult)
+        # call - make function call (variable before is the function's identifier. 
+        #                             variable after is all of the arguments that have been put together using the , operator)
+        # access - array access - ( #2 access 3  =>  #2[3] )
+
+        # , - put together function arguments
+        # goto - jump to label
+        # @x followed by : - define a label
+
+        # = - set equal to
         if operator == "=":
             right_tokens = []
             while True:
@@ -87,13 +110,35 @@ class IRToCDecompiler:
                     right_tokens.append(var_name)
                 else:
                     right_tokens.append(token)
+            if left_var_type == "":
+                return f"{left_var} = {' '.join(right_tokens)};"
+            return f"{left_var_type} {left_var} = {' '.join(right_tokens)};"
+        
+        elif operator == "+" or operator == "-" or operator == "%" or operator == "^" or operator == "&" or operator == "|" or operator == "*" or operator == "/" or operator == ">>" or operator == "<<":
+            right_var = next(token_iter)
+            right_var_name, _ = self.handle_variables(right_var)
+            return f"{left_var} {operator}= {right_var_name};"
+        
+        elif operator == "<" or operator == ">" or operator == "==" or operator == "!=" or operator == "<=" or operator == ">=":
+            right_var = next(token_iter)
+            right_var_name, _ = self.handle_variables(right_var)
 
-            return f"{left_var} = {' '.join(right_tokens)};"
-
+            return f"{left_var} = {left_var} {operator} {right_var_name};"
+        
         return ""  # TODO: Handle other cases  
 
     # Map an IR variable (e.g., #1) to a C variable name and type
     def handle_variables(self, var):
         var_name = f"var{var[1:]}"
-        var_type = self.types.get(var, "int")  # Default to int if type is unknown
+        var_type = f"{self.types.get(var)}"
+        # If var_type has i, f, or u, then it is an int, float, or unsigne
+        if var_type.count("i") > 0:
+            var_type = "int"
+        elif var_type.count("f") > 0:
+            var_type = "float"
+        elif var_type.count("u") > 0:
+            var_type = "unsigned int"
+        else:
+            var_type = ""
+
         return var_name, var_type
