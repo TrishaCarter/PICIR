@@ -133,11 +133,11 @@ TEST_TOKENS = [
 TEST_FUNCTION = Function(TEST_NAME, TEST_INPUT_VARIABLES, TEST_TOKENS)
 
 # make new line after ; and { when printing test_tokens
-for token in TEST_TOKENS:
-    print(token, end=" ")
-    if token == ";" or token == "{":
-        print()
+# for token in TEST_TOKENS:
+#     print(token, end=" ")
+#     if token == ";" or token == "{":
+#         print()
     
 
 COMPILED_CODE = IRToCDecompiler(TEST_FUNCTION, TEST_TYPES, TEST_INCLUDED_LIBRARIES, TEST_EXTERNAL_VARIABLES).generate_c_code()
-print(f"\nTada! Basic Code:\n{COMPILED_CODE}")
+print(COMPILED_CODE)

@@ -22,12 +22,10 @@ class IRToCDecompiler:
         # TODO: handle argument types
         input_vars = [f"{self.types[var]} var{var[1:]}" for var in self.function.input_variables]
         # split each input var by space, use handle_variables on the first part of the split and keep the second part the same
-        for var in input_vars:
-            var.split(" ")
-            _, var_type = self.handle_variables(var[0])
-            var = f"{var_type} {var[1]}"
 
-        c_code.append(f"void {self.function.name}({','.join(input_vars)}) {{")
+        input_vars = self.handle_input_vars(input_vars)
+
+        c_code.append(f"void {self.function.name}({', '.join(input_vars)}) {{")
 
         # Translate tokens to C statements
         body_code = self.handle_tokens()
@@ -45,7 +43,6 @@ class IRToCDecompiler:
         #     print(token)
 
         for token in token_iter:
-            # TODO: "\n" and "\t" are not handlesd correctly
             if token == "if":
                 if_block = self.handle_if_else(token_iter)
                 for line in if_block:
@@ -82,7 +79,9 @@ class IRToCDecompiler:
                 else:
                     block.append(self.handle_operations(token, token_iter))
 
-            # print(block)
+            for i in range(len(block)):
+                if isinstance(block[i], list):
+                    block[i] = ' '.join(block[i])
             return block
 
         # collect list of next tokens from  "(" to ")"
@@ -145,11 +144,7 @@ class IRToCDecompiler:
         operator = next(token_iter)
 
         # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
-        # ref - reference of & (always has a 0 before it, where the 0 does not mean anything)
         # . - structure/union access - probably wait for this one (will be difficult)
-        # call - make function call (variable before is the function's identifier. 
-        #                             variable after is all of the arguments that have been put together using the , operator)
-        # access - array access - ( #2 access 3  =>  #2[3] )
 
         # , - put together function arguments
         # goto - jump to label
@@ -167,6 +162,14 @@ class IRToCDecompiler:
                     right_tokens.append(var_name)
                 else:
                     right_tokens.append(token)
+
+            # if any right tokens contain "\n", replace with r"\n" (raw string literal)
+            for i in range(len(right_tokens)):
+                if "\n" in right_tokens[i]:
+                    right_tokens[i] = right_tokens[i].replace("\n", r"\n")
+                if "\t" in right_tokens[i]:
+                    right_tokens[i] = right_tokens[i].replace("\t", r"\t")
+            
             if left_var_type == "":
                 return f"{left_var} = {' '.join(right_tokens)};"
             return f"{left_var_type} {left_var} = {' '.join(right_tokens)};"
@@ -194,12 +197,12 @@ class IRToCDecompiler:
         # elif operator == "deref":
         #     return f"{left_var} = *{next(token_iter)};"
         
-        # elif operator == "call":
-        #     func_name = next(token_iter)
-        #     args = []
-        #     while (arg := next(token_iter)) != ";":
-        #         args.append(arg)
-        #     return f"{left_var} = {func_name}({', '.join(args)});"
+        elif operator == "call":
+            func_name, _ = self.handle_variables(next(token_iter))
+            args = []
+            while (arg := next(token_iter)) != ";":
+                args.append(arg)
+            return f"{left_var} = {func_name}({', '.join(args)});"
 
         
         # union/structs 
@@ -219,7 +222,7 @@ class IRToCDecompiler:
     def handle_variables(self, var):
         var_name = f"var{var[1:]}"
         var_type = f"{self.types.get(var)}"
-        # If var_type has i, f, or u, then it is an int, float, or unsigne
+        # If var_type has i, f, or u, then it is an int, float, or unsigned
         if var_type.count("i") > 0:
             var_type = "int"
         elif var_type.count("f") > 0:
@@ -230,3 +233,17 @@ class IRToCDecompiler:
             var_type = ""
 
         return var_name, var_type
+
+    def handle_input_vars(self, input_vars):
+        converted_vars = []
+        for var in input_vars:
+            var_type = var.split(" ")[0]
+            if var_type.count("i") > 0:
+                var_type = "int"
+            elif var_type.count("f") > 0:
+                var_type = "float"
+            elif var_type.count("u") > 0:
+                var_type = "unsigned int"
+            converted_vars.append(f"{var_type} {var.split(' ')[1]}")
+            
+        return converted_vars
