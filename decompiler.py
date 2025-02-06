@@ -200,6 +200,18 @@ class IRToCDecompiler:
         #     while (arg := next(token_iter)) != ";":
         #         args.append(arg)
         #     return f"{left_var} = {func_name}({', '.join(args)});"
+
+        
+        # union/structs 
+        # elif operator == ".": 
+        #     struct_var = next(token_iter)
+        #     struct_var_name, _ = self.handle_variables(struct_var)
+        #     return f"{left_var} = {struct_var_name}.{next(token_iter)};"
+
+        # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
+        # elif operator == "bitnot": 
+        #     return f"{left_var} = ~{next(token_iter)};"
+        
         
         return ""  # TODO: Handle other cases  
 
