@@ -14,8 +14,6 @@ class IRToCDecompiler:
         self.external_vars = external_vars
 
     # generate the full C code
-    # TODO: see if it would be better to return a file instead of console output
-    # more than likely should, but I will see what is easier for debugging, demonstration, etc.
     def generate_c_code(self):
         # Add libraries
         c_code = [lib for lib in self.libraries]
@@ -61,45 +59,60 @@ class IRToCDecompiler:
 
         return c_code
 
-    # def handle_if_else(self, token_iter):
-    #     def parse_block():
-    #         block = []
-    #         while True:
-    #             token = next(token_iter, None)
-    #             if token is None:
-    #                 break
+    # Trying to handle more for if-else cases
+    def handle_if_else(self, token_iter):
+        def parse_block():
+            block = []
+            while True:
+                token = next(token_iter, None)
+                if token is None:
+                    break
 
-    #             if token == "}":
-    #                 block.append(token)
+                if token == "}":
+                    block.append(token)
+                    break
                 
-    #             elif token == "if":
-    #                 block.append(handle_if_else(self, token_iter))  
-    #             elif token == "else":
-    #                 block.append(token + next(token_iter))
-    #                 block.append(parse_block())
-    #             elif token == "return":
-    #                 block.append(token + next(token_iter))
-    #             else:
-    #                 block.append(self.handle_operations(token, token_iter))
-    #         return block
+                elif token == "if":
+                    block.append(self.handle_if_else(token_iter))  
+                elif token == "else":
+                    block.append(token + next(token_iter))
+                    block.append(parse_block())
+                elif token == "return":
+                    block.append(token + next(token_iter))
+                else:
+                    block.append(self.handle_operations(token, token_iter))
 
-    #     # collect list of next tokens from  "(" to ")"
-    #     condition_list = []
-    #     while True:
-    #         token = next(token_iter)
-    #         if token == ")":
-    #             break
-    #         condition_list.append(token)
-    #     if len(condition_list) > 3:
-    #         conditon = handle_operations(condition_list[0], iter(condition_list))
-    #     else:
-    #         condition = next(token_iter) + next(token_iter) + next(token_iter) 
-    #     # condition_var, _ = self.handle_variables(condition)
-    #     if_block = ["if " + condition + next(token_iter)]
-    #     if_block.append(parse_block())
+            # print(block)
+            return block
+
+        # collect list of next tokens from  "(" to ")"
+        condition_list = []
+        while True:
+            token = next(token_iter)
+            if token == ")":
+                condition_list.append(token)
+                break
+            condition_list.append(token)
+
+        if len(condition_list) > 3:
+            condition = self.handle_operations(condition_list[0], iter(condition_list))
+        else:
+            condition = ' '.join(condition_list)
+        # condition_var, _ = self.handle_variables(condition)
+        if_block = ["if " + condition + next(token_iter)]
         
-    #     return if_block
+        # for each in block, append new line to if_block as string
+        parse_block = parse_block()
+        string_block = ""
+        for line in parse_block:
+            string_block += f"\t{line}\n"
+        if_block.append(string_block)
+        
+        return if_block
 
+    '''
+    # Last Working if_else block
+    
     def handle_if_else(self, token_iter):
         block = ["if " + next(token_iter)]
         condition = next(token_iter)  # This is assuming a single variable/literal (item)
@@ -125,7 +138,8 @@ class IRToCDecompiler:
                 block.append(self.handle_operations(token, token_iter))
 
         return block
-    
+    '''
+
     def handle_operations(self, first_token, token_iter):
         left_var, left_var_type = self.handle_variables(first_token)
         operator = next(token_iter)
@@ -168,6 +182,7 @@ class IRToCDecompiler:
 
             return f"{left_var} = {left_var} {operator} {right_var_name};"
 
+        # trying to work on more operators
         # elif operator == "access":
         #     right_var = next(token_iter)
         #     return f"{left_var} = {left_var}[{right_var}];"
