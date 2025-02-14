@@ -1,18 +1,24 @@
 # This is the Internal Representation to C code "Decompiler"
 
-# Made into a class in case we want to make more than C code in the future
-# It would probably be better to make this a class anyway for organization anyway. 
-
+# Made into a class in case we want to make more than C code in the future 
+import itertools
 
 class IRToCDecompiler:
     def __init__(self, function, types, libraries, external_vars):
         self.function = function
         self.types = types
         self.libraries = libraries
+
+        # These libraries are needed for platform independent code
+        self.libraries.append("#include <stdint.h>")
+        self.libraries.append("#include <stddef.h>")
+
         self.external_vars = external_vars
+
 
     # generate the full C code
     def generate_c_code(self):
+
         # Add libraries
         c_code = [lib for lib in self.libraries]
 
@@ -36,16 +42,21 @@ class IRToCDecompiler:
     
     def handle_tokens(self):
         c_code = []
+        
         token_iter = iter(self.function.tokens)
         # for token in token_iter:
         #     print(token)
+        #     print()
 
         for token in token_iter:
             if token == "if":
                 if_block = self.handle_if_else(token_iter)
                 for line in if_block:
                     c_code.append(line)
-            
+            elif token == "else":
+                else_block = self.handle_if_else(token_iter, check_if=False)
+                for line in else_block:
+                    c_code.append(line)
             elif token == "return":
                 # this doesn't seem right
                 c_code.append("return;")
@@ -55,7 +66,7 @@ class IRToCDecompiler:
         return c_code
 
     # Trying to handle more for if-else cases
-    def handle_if_else(self, token_iter):
+    def handle_if_else(self, token_iter, check_if=True):
         def parse_block():
             block = []
             while True:
@@ -83,20 +94,24 @@ class IRToCDecompiler:
             return block
 
         # collect list of next tokens from  "(" to ")"
-        condition_list = []
-        while True:
-            token = next(token_iter)
-            if token == ")":
+        if check_if:
+            condition_list = []
+            while True:
+                token = next(token_iter, None)
+                if token == ")":
+                    condition_list.append(token)
+                    break
                 condition_list.append(token)
-                break
-            condition_list.append(token)
 
-        if len(condition_list) > 3:
-            condition = self.handle_operations(condition_list[0], iter(condition_list))
-        else:
-            condition = ' '.join(condition_list)
-        # condition_var, _ = self.handle_variables(condition)
-        if_block = ["if " + condition + next(token_iter)]
+            if len(condition_list) > 3:
+                condition = self.handle_operations(condition_list[0], iter(condition_list))
+            else:
+                condition = ' '.join(condition_list)
+            # condition_var, _ = self.handle_variables(condition)
+            if_block = ["if " + condition + next(token_iter)]
+
+        if not check_if:
+            if_block = ["else" + next(token_iter)]
         
         # for each in block, append new line to if_block as string
         parse_block = parse_block()
@@ -107,45 +122,11 @@ class IRToCDecompiler:
         
         return if_block
 
-    '''
-    # Last Working if_else block
-    
-    def handle_if_else(self, token_iter):
-        block = ["if " + next(token_iter)]
-        condition = next(token_iter)  # This is assuming a single variable/literal (item)
-        condition_var, _ = self.handle_variables(condition)
-        block[0] += condition_var + next(token_iter) + next(token_iter)
-
-        while True:
-
-            token = next(token_iter, None)
-            if token is None:
-                break
-            if token == "else":
-                block.append(token + next(token_iter))
-
-            elif token == "}":
-                block.append(token)
-                break
-
-            elif token == "return":
-                block.append(token + next(token_iter))
-
-            else:
-                block.append(self.handle_operations(token, token_iter))
-
-        return block
-    '''
-
     def handle_operations(self, first_token, token_iter):
+
         left_var, left_var_type = self.handle_variables(first_token)
-        operator = next(token_iter)
-
-        # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
-        # . - structure/union access - probably wait for this one (will be difficult)
-
+        operator = next(token_iter, None)
         # , - put together function arguments
-        # goto - jump to label
         # @x followed by : - define a label
 
         # = - set equal to
@@ -158,6 +139,11 @@ class IRToCDecompiler:
                 elif token.startswith("#"):
                     var_name, _ = self.handle_variables(token)
                     right_tokens.append(var_name)
+                elif token == "access":
+                    # var_name, _ = self.handle_operations(next(token_iter))
+                    index = next(token_iter)
+                    right_tokens.append(f"[{index}]")
+                    
                 else:
                     right_tokens.append(token)
 
@@ -170,7 +156,7 @@ class IRToCDecompiler:
             
             if left_var_type == "":
                 return f"{left_var} = {' '.join(right_tokens)};"
-            return f"{left_var_type} {left_var} = {' '.join(right_tokens)};"
+            return f"{left_var_type} {left_var} = {''.join(right_tokens)};"
         
         elif operator == "+" or operator == "-" or operator == "%" or operator == "^" or operator == "&" or operator == "|" or operator == "*" or operator == "/" or operator == ">>" or operator == "<<":
             right_var = next(token_iter)
@@ -183,17 +169,36 @@ class IRToCDecompiler:
 
             return f"{left_var} = {left_var} {operator} {right_var_name};"
 
-        # trying to work on more operators
-        # elif operator == "access":
-        #     right_var = next(token_iter)
-        #     return f"{left_var} = {left_var}[{right_var}];"
+        elif operator == "access":
+            index = next(token_iter)
+            statement = f"{left_var}[{index}]"
+            operator = next(token_iter)
+            # append correctly handled tokens to statement
+            while operator != ";":
+                if operator == "access":
+                    index = next(token_iter)
+                    statement += f"[{index}]"
+                elif operator == "=":
+                    statement += " ="
+
+                else:
+                    assignment, _ = self.handle_variables(operator)
+                    statement += f" {assignment}"
+                
+                operator = next(token_iter)
+
+            statement += ";"
+
+            return statement
+            
         
-        # elif operator == "ref":
-        #     ref_var = next(token_iter)
-        #     return f"{left_var} = &{ref_var};"
+        # ref & deref (pointers) -- will probably be more complex with testing
+        elif operator == "ref":
+            ref_var = next(token_iter)
+            return f"{left_var} = &{ref_var};"
         
-        # elif operator == "deref":
-        #     return f"{left_var} = *{next(token_iter)};"
+        elif operator == "deref":
+            return f"{left_var} = *{next(token_iter)};"
         
         elif operator == "call":
             func_name, _ = self.handle_variables(next(token_iter))
@@ -204,15 +209,19 @@ class IRToCDecompiler:
 
         
         # union/structs 
-        # elif operator == ".": 
-        #     struct_var = next(token_iter)
-        #     struct_var_name, _ = self.handle_variables(struct_var)
-        #     return f"{left_var} = {struct_var_name}.{next(token_iter)};"
+        # not sure how these will be structured for input
+        elif operator == ".": 
+            struct_var = next(token_iter)
+            struct_var_name, _ = self.handle_variables(struct_var)
+            return f"{left_var} = {struct_var_name}.{next(token_iter)};"
 
         # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
-        # elif operator == "bitnot": 
-        #     return f"{left_var} = ~{next(token_iter)};"
-        
+        elif operator == "bitnot":
+            # remove the zero, I suppose. Also need to figure how how the bitnot will be structured
+            return f"{left_var} = ~{next(token_iter)};"
+
+        elif operator == "goto":
+            return f"{operator} {next(token_iter)};"
         
         return ""  # TODO: Handle other cases  
 
@@ -232,6 +241,7 @@ class IRToCDecompiler:
 
         return var_name, var_type
 
+    # only some of the variable types
     def handle_input_vars(self, input_vars):
         converted_vars = []
         for var in input_vars:

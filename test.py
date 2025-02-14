@@ -118,24 +118,24 @@ TEST_TOKENS = [
             "#11", "=", "10", "*", "3", ";", 
             "#12", "=", "#11", "-", "2", ";", 
             "#8", "=", "#12", ";", 
-            "#13", "access", "0", "=", "#8", ";", 
-            "return", ";"
+            "#13", "access", "1", "=", "#8", "access", "0", ";", 
+            "return", ";",
         "}", "else", "{", "}", 
         "#4", "=", "2", ";", 
         "#5", "=", "3", ";", 
         "#6", "=", "#4", "<<", "#5", ";", 
         "#9", "=", "#6", ";", 
-        "#13", "access", "0" "=", "#9", ";"
+        "#13", "access", "0", "=", "#9", ";",
         "return", ";"
     ]
 
 
 TEST_FUNCTION = Function(TEST_NAME, TEST_INPUT_VARIABLES, TEST_TOKENS)
 # make new line after ; and { when printing test_tokens
-# for token in TEST_TOKENS:
-#     print(token, end=" ")
-#     if token == ";" or token == "{":
-#         print()
+for token in TEST_TOKENS:
+    print(token, end=" ")
+    if token == ";" or token == "{":
+        print()
     
 
 COMPILED_CODE = IRToCDecompiler(TEST_FUNCTION, TEST_TYPES, TEST_INCLUDED_LIBRARIES, TEST_EXTERNAL_VARIABLES).generate_c_code()
