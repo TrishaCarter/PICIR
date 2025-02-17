@@ -136,6 +136,7 @@ for token in TEST_TOKENS:
     print(token, end=" ")
     if token == ";" or token == "{":
         print()
+print()
     
 
 COMPILED_CODE = IRToCDecompiler(TEST_FUNCTION, TEST_TYPES, TEST_INCLUDED_LIBRARIES, TEST_EXTERNAL_VARIABLES).generate_c_code()

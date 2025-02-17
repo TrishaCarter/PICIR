@@ -1,7 +1,6 @@
 # This is the Internal Representation to C code "Decompiler"
 
 # Made into a class in case we want to make more than C code in the future 
-import itertools
 
 class IRToCDecompiler:
     def __init__(self, function, types, libraries, external_vars):
@@ -12,6 +11,8 @@ class IRToCDecompiler:
         # These libraries are needed for platform independent code
         self.libraries.append("#include <stdint.h>")
         self.libraries.append("#include <stddef.h>")
+        self.libraries.append("#include <stdbool.h>")
+        self.libraries.append("#include <float.h>")
 
         self.external_vars = external_vars
 
@@ -21,6 +22,7 @@ class IRToCDecompiler:
 
         # Add libraries
         c_code = [lib for lib in self.libraries]
+        c_code.append("")
 
         # Start of Function, arguments, name
         # TODO: handle argument types
@@ -65,7 +67,6 @@ class IRToCDecompiler:
 
         return c_code
 
-    # Trying to handle more for if-else cases
     def handle_if_else(self, token_iter, check_if=True):
         def parse_block():
             block = []
@@ -126,6 +127,8 @@ class IRToCDecompiler:
 
         left_var, left_var_type = self.handle_variables(first_token)
         operator = next(token_iter, None)
+
+        # TODO
         # , - put together function arguments
         # @x followed by : - define a label
 
@@ -229,20 +232,52 @@ class IRToCDecompiler:
     def handle_variables(self, var):
         var_name = f"var{var[1:]}"
         var_type = f"{self.types.get(var)}"
-        # If var_type has i, f, or u, then it is an int, float, or unsigned
+        return_var_type = ""
+
+        # Parse Data Types
         if var_type.count("i") > 0:
-            var_type = "int"
+            return_var_type += "int"
+            if var_type.count("*") > 0:
+                return_var_type += "ptr"
+            else:
+                if var_type.count("8") > 0:
+                    return_var_type += "8"
+                elif var_type.count("16") > 0:
+                    return_var_type += "16"
+                elif var_type.count("32") > 0:
+                    return_var_type += "32"
+                else:
+                    return_var_type += "64"
+
         elif var_type.count("f") > 0:
             var_type = "float"
-        elif var_type.count("u") > 0:
-            var_type = "unsigned int"
-        else:
-            var_type = ""
+            if var_type.count("32") > 0:
+                return_var_type += "32"
+            else:
+                return_var_type += "64"
 
-        return var_name, var_type
+        elif var_type.count("u") > 0:
+            var_type = "uint"
+            if var_type.count("*") > 0:
+                return_var_type += "ptr"
+            else:
+                if var_type.count("8") > 0:
+                    return_var_type += "8"
+                elif var_type.count("16") > 0:
+                    return_var_type += "16"
+                elif var_type.count("32") > 0:
+                    return_var_type += "32"
+                else:
+                    return_var_type += "64"
+        else:
+            return_var_type = ""
+
+        return_var_type+= "_t"
+        return var_name, return_var_type
 
     # only some of the variable types
     def handle_input_vars(self, input_vars):
+        # TODO: See what to do about argument types
         converted_vars = []
         for var in input_vars:
             var_type = var.split(" ")[0]
