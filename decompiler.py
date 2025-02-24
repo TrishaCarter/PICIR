@@ -256,13 +256,30 @@ class IRToCDecompiler:
             return f"{left_var} = {func_name}({', '.join(args)});"
 
         
-        # union/structs 
+        # union/structs (original)
         # not sure how these will be structured for input
-        elif operator == ".": 
-            struct_var = next(token_iter)
-            struct_var_name, _ = self.handle_variables(struct_var)
-            return f"{left_var} = {struct_var_name}.{next(token_iter)};"
+        # elif operator == ".": 
+        #     struct_var = next(token_iter)
+        #     struct_var_name, _ = self.handle_variables(struct_var)
+        #     return f"{left_var} = {struct_var_name}.{next(token_iter)};"
+        
+        
+        # Struct/Union Handling
+        elif operator == ".":
+            struct_field = next(token_iter)
+            return f"{left_var} = {left_var}.{struct_field};"
 
+        elif left_var_type.startswith("struct") or left_var_type.startswith("union"):
+            if operator == "=":
+                right_var = next(token_iter)
+                return f"{left_var} = {right_var};"
+            
+        if left_var_type.startswith("struct") or left_var_type.startswith("union"):
+            if operator == ".":
+                struct_var = next(token_iter)
+                struct_var_name, _ = self.handle_variables(struct_var)
+                return f"{left_var} = {struct_var_name}.{next(token_iter)};"
+       
         # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
         elif operator == "bitnot":
             # remove the zero, I suppose. Also need to figure how how the bitnot will be structured
