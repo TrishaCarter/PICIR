@@ -1,6 +1,10 @@
 # This is the Internal Representation to C code "Decompiler"
 
 # Made into a class in case we want to make more than C code in the future 
+ 
+# TODO: Pointer Arithmetic and More Print Statements
+
+IS_MAIN = False
 
 class IRToCDecompiler:
     def __init__(self, function, types, libraries, external_vars):
@@ -10,9 +14,9 @@ class IRToCDecompiler:
 
         # These libraries are needed for platform independent code
         self.libraries.append("#include <stdint.h>")
-        self.libraries.append("#include <stddef.h>")
-        self.libraries.append("#include <stdbool.h>")
-        self.libraries.append("#include <float.h>")
+        # self.libraries.append("#include <stddef.h>")
+        # self.libraries.append("#include <stdbool.h>")
+        # self.libraries.append("#include <float.h>")
 
         self.external_vars = external_vars
 
@@ -24,14 +28,30 @@ class IRToCDecompiler:
         c_code = [lib for lib in self.libraries]
         c_code.append("")
 
-        # Start of Function, arguments, name
-        # TODO: handle argument types
-        input_vars = [f"{self.types[var]} var{var[1:]}" for var in self.function.input_variables]
-        # split each input var by space, use handle_variables on the first part of the split and keep the second part the same
+        # Start of function, arguments, name, and return type
+        input_vars = [var for var in self.function.input_variables]
+        converted_vars = []
+        for var in input_vars:
+            if var.count("arg") > 0:
+                if var.count("argc")> 0:
+                    converted_vars.append("int argc")
+                    input_vars.remove(var)
+                elif var.count("argv") > 0:
+                    converted_vars.append("char **argv")
+                    input_vars.remove(var)
+                continue
 
-        input_vars = self.handle_input_vars(input_vars)
+            var_name, var_type = self.handle_variables(var)
+            converted_vars.append(f"{var_type} {var_name}")
 
-        c_code.append(f"void {self.function.name}({', '.join(input_vars)}) {{")
+        function_name = f'{self.function.name}'
+
+        if function_name == "main":
+            IS_MAIN = True
+            c_code.append(f"int {function_name}({', '.join(converted_vars)}) {{")
+
+        else:
+            c_code.append(f"void {self.function.name}({', '.join(converted_vars)}) {{")
 
         # Translate tokens to C statements
         body_code = self.handle_tokens()
@@ -40,7 +60,12 @@ class IRToCDecompiler:
         # Close function
         c_code.append("}")
 
-        return "\n".join(c_code)
+        c_code = "\n".join(c_code)
+
+        # for handling print statements and anything else post translation
+        c_code = self.handle_post_translation(c_code)
+
+        return c_code
     
     def handle_tokens(self):
         c_code = []
@@ -51,6 +76,7 @@ class IRToCDecompiler:
         #     print()
 
         for token in token_iter:
+
             if token == "if":
                 if_block = self.handle_if_else(token_iter)
                 for line in if_block:
@@ -59,11 +85,22 @@ class IRToCDecompiler:
                 else_block = self.handle_if_else(token_iter, check_if=False)
                 for line in else_block:
                     c_code.append(line)
+
             elif token == "return":
-                # this doesn't seem right
-                c_code.append("return;")
+                return_statement = "return"
+
+                # until token ";" is found, append to return statement 
+                while True:
+                    return_token = next(token_iter, None)
+                    if return_token == ";":
+                        return_statement += f"{return_token}"
+                        break
+                    return_statement += f" {return_token}"
+                c_code.append(return_statement)
+                
             else:
                 c_code.append(self.handle_operations(token, token_iter))
+                
 
         return c_code
 
@@ -85,7 +122,15 @@ class IRToCDecompiler:
                     block.append(token + next(token_iter))
                     block.append(parse_block())
                 elif token == "return":
-                    block.append(token + next(token_iter))
+                    return_tokens = "return"
+                    while True:
+                        next_token = next(token_iter, None)
+                        if next_token == ";":
+                            return_tokens += f"{next_token}"
+                            break
+                        else:
+                            return_tokens += f" {next_token}"
+                    block.append(return_tokens)
                 else:
                     block.append(self.handle_operations(token, token_iter))
 
@@ -107,8 +152,10 @@ class IRToCDecompiler:
             if len(condition_list) > 3:
                 condition = self.handle_operations(condition_list[0], iter(condition_list))
             else:
+                variable = condition_list[1]
+                condition_list[1] = self.handle_variables(variable)[0]
                 condition = ' '.join(condition_list)
-            # condition_var, _ = self.handle_variables(condition)
+            
             if_block = ["if " + condition + next(token_iter)]
 
         if not check_if:
@@ -127,10 +174,6 @@ class IRToCDecompiler:
 
         left_var, left_var_type = self.handle_variables(first_token)
         operator = next(token_iter, None)
-
-        # TODO
-        # , - put together function arguments
-        # @x followed by : - define a label
 
         # = - set equal to
         if operator == "=":
@@ -181,17 +224,19 @@ class IRToCDecompiler:
                 if operator == "access":
                     index = next(token_iter)
                     statement += f"[{index}]"
-                elif operator == "=":
+                if operator == "=":
                     statement += " ="
 
                 else:
-                    assignment, _ = self.handle_variables(operator)
-                    statement += f" {assignment}"
+                    # handle if right side has access or just variable
+                    if operator.startswith("#"):
+                        var_name, _ = self.handle_variables(operator)
+                        statement += f" {var_name}"    
                 
                 operator = next(token_iter)
 
             statement += ";"
-
+            
             return statement
             
         
@@ -226,7 +271,11 @@ class IRToCDecompiler:
         elif operator == "goto":
             return f"{operator} {next(token_iter)};"
         
-        return ""  # TODO: Handle other cases  
+        elif operator and operator.split()[0] == "@":
+            return f"{next(token_iter, None)} {next(token_iter, None)}/n"
+        
+        else:
+            return ""  # TODO: Handle any other cases that arise
 
     # Map an IR variable (e.g., #1) to a C variable name and type
     def handle_variables(self, var):
@@ -257,7 +306,7 @@ class IRToCDecompiler:
                 return_var_type += "64"
 
         elif var_type.count("u") > 0:
-            var_type = "uint"
+            return_var_type += "uint"
             if var_type.count("*") > 0:
                 return_var_type += "ptr"
             else:
@@ -273,20 +322,38 @@ class IRToCDecompiler:
             return_var_type = ""
 
         return_var_type+= "_t"
+        if return_var_type.count("ptr") > 0:
+            # add * after _t
+            return_var_type = return_var_type[:return_var_type.index("_t")+2] + "*" + return_var_type[return_var_type.index("_t")+2:]
         return var_name, return_var_type
+    
+    def handle_post_translation(self, code):
+    # go through the code to replace function calls with their respective function names
+        code = code.split("\n")
 
-    # only some of the variable types
-    def handle_input_vars(self, input_vars):
-        # TODO: See what to do about argument types
-        converted_vars = []
-        for var in input_vars:
-            var_type = var.split(" ")[0]
-            if var_type.count("i") > 0:
-                var_type = "int"
-            elif var_type.count("f") > 0:
-                var_type = "float"
-            elif var_type.count("u") > 0:
-                var_type = "unsigned int"
-            converted_vars.append(f"{var_type} {var.split(' ')[1]}")
-            
-        return converted_vars
+        for i in range(len(code)):
+            # store names of variables assigned strings and replace any calls of that name with printf
+            if '"' in code[i]:
+                
+                # remove leading whitespace, but also store the whitespace to add back later
+                white_space = code[i][:code[i].index(code[i].lstrip())]
+                line = code[i].lstrip()
+
+                # name of variable is in between first space and next space
+                if "=" in line:
+                    name = f"{line[line.index(' '):line.index(' ', line.index('=')-1)]}".strip()
+                    # replace 'line' up to first space with const char*
+                    code[i] = white_space + 'const char*' + line[line.index(' '):]
+
+                # store the string that is assigned to the variable, minus the ; at the end
+                # string = code[i][code[i].index('"'):code[i].index(';')]
+
+                # replace all other instances of the variable name with printf, starting after current line
+                for j in range(i+1, len(code)):
+                    if f'{name}()' in code[j]:
+                        # replace the whole line with print statement
+                        code[j] = white_space + 'printf(' + r'"%s", ' + name + ');'
+                # add *
+                
+        # put it back together
+        return "\n".join(code)
