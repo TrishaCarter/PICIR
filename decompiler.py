@@ -141,22 +141,24 @@ class IRToCDecompiler:
 
         # collect list of next tokens from  "(" to ")"
         if check_if:
-            condition_list = []
-            while True:
-                token = next(token_iter, None)
-                if token == ")":
-                    condition_list.append(token)
-                    break
-                condition_list.append(token)
+            condition = self.handle_variables(next(token_iter, None))[0]
+            # There are not parantheses now
+            # condition_list = []
+            # while True:
+            #     token = next(token_iter, None)
+            #     if token == ")":
+            #         condition_list.append(token)
+            #         break
+            #     condition_list.append(token)
 
-            if len(condition_list) > 3:
-                condition = self.handle_operations(condition_list[0], iter(condition_list))
-            else:
-                variable = condition_list[1]
-                condition_list[1] = self.handle_variables(variable)[0]
-                condition = ' '.join(condition_list)
+            # if len(condition_list) > 3:
+            #     condition = self.handle_operations(condition_list[0], iter(condition_list))
+            # else:
+            #     variable = condition_list[1]
+            #     condition_list[1] = self.handle_variables(variable)[0]
+            #     condition = ' '.join(condition_list)
             
-            if_block = ["if " + condition + next(token_iter)]
+            if_block = ["if (" + condition  + ")"  + next(token_iter)]
 
         if not check_if:
             if_block = ["else" + next(token_iter)]
@@ -298,12 +300,16 @@ class IRToCDecompiler:
                 else:
                     return_var_type += "64"
 
+            return_var_type+= "_t"
+
         elif var_type.count("f") > 0:
             var_type = "float"
             if var_type.count("32") > 0:
                 return_var_type += "32"
             else:
                 return_var_type += "64"
+
+            return_var_type+= "_t"
 
         elif var_type.count("u") > 0:
             return_var_type += "uint"
@@ -318,10 +324,13 @@ class IRToCDecompiler:
                     return_var_type += "32"
                 else:
                     return_var_type += "64"
+
+            return_var_type+= "_t"
+
         else:
             return_var_type = ""
 
-        return_var_type+= "_t"
+        
         if return_var_type.count("ptr") > 0:
             # add * after _t
             return_var_type = return_var_type[:return_var_type.index("_t")+2] + "*" + return_var_type[return_var_type.index("_t")+2:]
