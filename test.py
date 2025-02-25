@@ -108,7 +108,7 @@ Possible (primitive) types:
 
 """
 
-TEST_NAME = "main"
+TEST_NAME = "test"
 TEST_INPUT_VARIABLES = ["#13", "#1", "#2"]
 TEST_TOKENS = [
         "#7", "=", "#1", "<", "2", ";", 
@@ -119,24 +119,24 @@ TEST_TOKENS = [
             "#12", "=", "#11", "-", "2", ";", 
             "#8", "=", "#12", ";", 
             "#13", "access", "0", "=", "#8", ";", 
-            "return", ";"
+            "return", ";",
         "}", "else", "{", "}", 
         "#4", "=", "2", ";", 
         "#5", "=", "3", ";", 
         "#6", "=", "#4", "<<", "#5", ";", 
         "#9", "=", "#6", ";", 
-        "#13", "access", "0" "=", "#9", ";"
+        "#13", "access", "0", "=", "#9", ";",
         "return", ";"
     ]
 
 
 TEST_FUNCTION = Function(TEST_NAME, TEST_INPUT_VARIABLES, TEST_TOKENS)
-
 # make new line after ; and { when printing test_tokens
 # for token in TEST_TOKENS:
 #     print(token, end=" ")
 #     if token == ";" or token == "{":
 #         print()
+# print()
     
 
 COMPILED_CODE = IRToCDecompiler(TEST_FUNCTION, TEST_TYPES, TEST_INCLUDED_LIBRARIES, TEST_EXTERNAL_VARIABLES).generate_c_code()

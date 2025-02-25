@@ -1,31 +1,57 @@
 # This is the Internal Representation to C code "Decompiler"
 
-# Made into a class in case we want to make more than C code in the future
-# It would probably be better to make this a class anyway for organization anyway. 
+# Made into a class in case we want to make more than C code in the future 
+ 
+# TODO: Pointer Arithmetic and More Print Statements
 
-# TODO: call and access
-# TODO: variable initialization
+IS_MAIN = False
 
 class IRToCDecompiler:
     def __init__(self, function, types, libraries, external_vars):
         self.function = function
         self.types = types
         self.libraries = libraries
+
+        # These libraries are needed for platform independent code
+        self.libraries.append("#include <stdint.h>")
+        # self.libraries.append("#include <stddef.h>")
+        # self.libraries.append("#include <stdbool.h>")
+        # self.libraries.append("#include <float.h>")
+
         self.external_vars = external_vars
+
 
     # generate the full C code
     def generate_c_code(self):
+
         # Add libraries
         c_code = [lib for lib in self.libraries]
+        c_code.append("")
 
-        # Start of Function, arguments, name
-        # TODO: handle argument types
-        input_vars = [f"{self.types[var]} var{var[1:]}" for var in self.function.input_variables]
-        # split each input var by space, use handle_variables on the first part of the split and keep the second part the same
+        # Start of function, arguments, name, and return type
+        input_vars = [var for var in self.function.input_variables]
+        converted_vars = []
+        for var in input_vars:
+            if var.count("arg") > 0:
+                if var.count("argc")> 0:
+                    converted_vars.append("int argc")
+                    input_vars.remove(var)
+                elif var.count("argv") > 0:
+                    converted_vars.append("char **argv")
+                    input_vars.remove(var)
+                continue
 
-        input_vars = self.handle_input_vars(input_vars)
+            var_name, var_type = self.handle_variables(var)
+            converted_vars.append(f"{var_type} {var_name}")
 
-        c_code.append(f"void {self.function.name}({', '.join(input_vars)}) {{")
+        function_name = f'{self.function.name}'
+
+        if function_name == "main":
+            IS_MAIN = True
+            c_code.append(f"int {function_name}({', '.join(converted_vars)}) {{")
+
+        else:
+            c_code.append(f"void {self.function.name}({', '.join(converted_vars)}) {{")
 
         # Translate tokens to C statements
         body_code = self.handle_tokens()
@@ -34,30 +60,51 @@ class IRToCDecompiler:
         # Close function
         c_code.append("}")
 
-        return "\n".join(c_code)
+        c_code = "\n".join(c_code)
+
+        # for handling print statements and anything else post translation
+        c_code = self.handle_post_translation(c_code)
+
+        return c_code
     
     def handle_tokens(self):
         c_code = []
+        
         token_iter = iter(self.function.tokens)
         # for token in token_iter:
         #     print(token)
+        #     print()
 
         for token in token_iter:
+
             if token == "if":
                 if_block = self.handle_if_else(token_iter)
                 for line in if_block:
                     c_code.append(line)
-            
+            elif token == "else":
+                else_block = self.handle_if_else(token_iter, check_if=False)
+                for line in else_block:
+                    c_code.append(line)
+
             elif token == "return":
-                # this doesn't seem right
-                c_code.append("return;")
+                return_statement = "return"
+
+                # until token ";" is found, append to return statement 
+                while True:
+                    return_token = next(token_iter, None)
+                    if return_token == ";":
+                        return_statement += f"{return_token}"
+                        break
+                    return_statement += f" {return_token}"
+                c_code.append(return_statement)
+                
             else:
                 c_code.append(self.handle_operations(token, token_iter))
+                
 
         return c_code
 
-    # Trying to handle more for if-else cases
-    def handle_if_else(self, token_iter):
+    def handle_if_else(self, token_iter, check_if=True):
         def parse_block():
             block = []
             while True:
@@ -75,7 +122,15 @@ class IRToCDecompiler:
                     block.append(token + next(token_iter))
                     block.append(parse_block())
                 elif token == "return":
-                    block.append(token + next(token_iter))
+                    return_tokens = "return"
+                    while True:
+                        next_token = next(token_iter, None)
+                        if next_token == ";":
+                            return_tokens += f"{next_token}"
+                            break
+                        else:
+                            return_tokens += f" {next_token}"
+                    block.append(return_tokens)
                 else:
                     block.append(self.handle_operations(token, token_iter))
 
@@ -85,20 +140,26 @@ class IRToCDecompiler:
             return block
 
         # collect list of next tokens from  "(" to ")"
-        condition_list = []
-        while True:
-            token = next(token_iter)
-            if token == ")":
+        if check_if:
+            condition_list = []
+            while True:
+                token = next(token_iter, None)
+                if token == ")":
+                    condition_list.append(token)
+                    break
                 condition_list.append(token)
-                break
-            condition_list.append(token)
 
-        if len(condition_list) > 3:
-            condition = self.handle_operations(condition_list[0], iter(condition_list))
-        else:
-            condition = ' '.join(condition_list)
-        # condition_var, _ = self.handle_variables(condition)
-        if_block = ["if " + condition + next(token_iter)]
+            if len(condition_list) > 3:
+                condition = self.handle_operations(condition_list[0], iter(condition_list))
+            else:
+                variable = condition_list[1]
+                condition_list[1] = self.handle_variables(variable)[0]
+                condition = ' '.join(condition_list)
+            
+            if_block = ["if " + condition + next(token_iter)]
+
+        if not check_if:
+            if_block = ["else" + next(token_iter)]
         
         # for each in block, append new line to if_block as string
         parse_block = parse_block()
@@ -109,46 +170,10 @@ class IRToCDecompiler:
         
         return if_block
 
-    '''
-    # Last Working if_else block
-    
-    def handle_if_else(self, token_iter):
-        block = ["if " + next(token_iter)]
-        condition = next(token_iter)  # This is assuming a single variable/literal (item)
-        condition_var, _ = self.handle_variables(condition)
-        block[0] += condition_var + next(token_iter) + next(token_iter)
-
-        while True:
-
-            token = next(token_iter, None)
-            if token is None:
-                break
-            if token == "else":
-                block.append(token + next(token_iter))
-
-            elif token == "}":
-                block.append(token)
-                break
-
-            elif token == "return":
-                block.append(token + next(token_iter))
-
-            else:
-                block.append(self.handle_operations(token, token_iter))
-
-        return block
-    '''
-
     def handle_operations(self, first_token, token_iter):
+
         left_var, left_var_type = self.handle_variables(first_token)
-        operator = next(token_iter)
-
-        # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
-        # . - structure/union access - probably wait for this one (will be difficult)
-
-        # , - put together function arguments
-        # goto - jump to label
-        # @x followed by : - define a label
+        operator = next(token_iter, None)
 
         # = - set equal to
         if operator == "=":
@@ -160,6 +185,11 @@ class IRToCDecompiler:
                 elif token.startswith("#"):
                     var_name, _ = self.handle_variables(token)
                     right_tokens.append(var_name)
+                elif token == "access":
+                    # var_name, _ = self.handle_operations(next(token_iter))
+                    index = next(token_iter)
+                    right_tokens.append(f"[{index}]")
+                    
                 else:
                     right_tokens.append(token)
 
@@ -172,7 +202,7 @@ class IRToCDecompiler:
             
             if left_var_type == "":
                 return f"{left_var} = {' '.join(right_tokens)};"
-            return f"{left_var_type} {left_var} = {' '.join(right_tokens)};"
+            return f"{left_var_type} {left_var} = {''.join(right_tokens)};"
         
         elif operator == "+" or operator == "-" or operator == "%" or operator == "^" or operator == "&" or operator == "|" or operator == "*" or operator == "/" or operator == ">>" or operator == "<<":
             right_var = next(token_iter)
@@ -185,17 +215,38 @@ class IRToCDecompiler:
 
             return f"{left_var} = {left_var} {operator} {right_var_name};"
 
-        # trying to work on more operators
-        # elif operator == "access":
-        #     right_var = next(token_iter)
-        #     return f"{left_var} = {left_var}[{right_var}];"
+        elif operator == "access":
+            index = next(token_iter)
+            statement = f"{left_var}[{index}]"
+            operator = next(token_iter)
+            # append correctly handled tokens to statement
+            while operator != ";":
+                if operator == "access":
+                    index = next(token_iter)
+                    statement += f"[{index}]"
+                if operator == "=":
+                    statement += " ="
+
+                else:
+                    # handle if right side has access or just variable
+                    if operator.startswith("#"):
+                        var_name, _ = self.handle_variables(operator)
+                        statement += f" {var_name}"    
+                
+                operator = next(token_iter)
+
+            statement += ";"
+            
+            return statement
+            
         
-        # elif operator == "ref":
-        #     ref_var = next(token_iter)
-        #     return f"{left_var} = &{ref_var};"
+        # ref & deref (pointers) -- will probably be more complex with testing
+        elif operator == "ref":
+            ref_var = next(token_iter)
+            return f"{left_var} = &{ref_var};"
         
-        # elif operator == "deref":
-        #     return f"{left_var} = *{next(token_iter)};"
+        elif operator == "deref":
+            return f"{left_var} = *{next(token_iter)};"
         
         elif operator == "call":
             func_name, _ = self.handle_variables(next(token_iter))
@@ -206,44 +257,103 @@ class IRToCDecompiler:
 
         
         # union/structs 
-        # elif operator == ".": 
-        #     struct_var = next(token_iter)
-        #     struct_var_name, _ = self.handle_variables(struct_var)
-        #     return f"{left_var} = {struct_var_name}.{next(token_iter)};"
+        # not sure how these will be structured for input
+        elif operator == ".": 
+            struct_var = next(token_iter)
+            struct_var_name, _ = self.handle_variables(struct_var)
+            return f"{left_var} = {struct_var_name}.{next(token_iter)};"
 
         # bitnot - bitwise not ~ (always has a 0 before it, where the 0 does not mean anything)
-        # elif operator == "bitnot": 
-        #     return f"{left_var} = ~{next(token_iter)};"
+        elif operator == "bitnot":
+            # remove the zero, I suppose. Also need to figure how how the bitnot will be structured
+            return f"{left_var} = ~{next(token_iter)};"
+
+        elif operator == "goto":
+            return f"{operator} {next(token_iter)};"
         
+        elif operator and operator.split()[0] == "@":
+            return f"{next(token_iter, None)} {next(token_iter, None)}/n"
         
-        return ""  # TODO: Handle other cases  
+        else:
+            return ""  # TODO: Handle any other cases that arise
 
     # Map an IR variable (e.g., #1) to a C variable name and type
     def handle_variables(self, var):
         var_name = f"var{var[1:]}"
         var_type = f"{self.types.get(var)}"
-        # If var_type has i, f, or u, then it is an int, float, or unsigned
+        return_var_type = ""
+
+        # Parse Data Types
         if var_type.count("i") > 0:
-            var_type = "int"
+            return_var_type += "int"
+            if var_type.count("*") > 0:
+                return_var_type += "ptr"
+            else:
+                if var_type.count("8") > 0:
+                    return_var_type += "8"
+                elif var_type.count("16") > 0:
+                    return_var_type += "16"
+                elif var_type.count("32") > 0:
+                    return_var_type += "32"
+                else:
+                    return_var_type += "64"
+
         elif var_type.count("f") > 0:
             var_type = "float"
+            if var_type.count("32") > 0:
+                return_var_type += "32"
+            else:
+                return_var_type += "64"
+
         elif var_type.count("u") > 0:
-            var_type = "unsigned int"
+            return_var_type += "uint"
+            if var_type.count("*") > 0:
+                return_var_type += "ptr"
+            else:
+                if var_type.count("8") > 0:
+                    return_var_type += "8"
+                elif var_type.count("16") > 0:
+                    return_var_type += "16"
+                elif var_type.count("32") > 0:
+                    return_var_type += "32"
+                else:
+                    return_var_type += "64"
         else:
-            var_type = ""
+            return_var_type = ""
 
-        return var_name, var_type
+        return_var_type+= "_t"
+        if return_var_type.count("ptr") > 0:
+            # add * after _t
+            return_var_type = return_var_type[:return_var_type.index("_t")+2] + "*" + return_var_type[return_var_type.index("_t")+2:]
+        return var_name, return_var_type
+    
+    def handle_post_translation(self, code):
+    # go through the code to replace function calls with their respective function names
+        code = code.split("\n")
 
-    def handle_input_vars(self, input_vars):
-        converted_vars = []
-        for var in input_vars:
-            var_type = var.split(" ")[0]
-            if var_type.count("i") > 0:
-                var_type = "int"
-            elif var_type.count("f") > 0:
-                var_type = "float"
-            elif var_type.count("u") > 0:
-                var_type = "unsigned int"
-            converted_vars.append(f"{var_type} {var.split(' ')[1]}")
-            
-        return converted_vars
+        for i in range(len(code)):
+            # store names of variables assigned strings and replace any calls of that name with printf
+            if '"' in code[i]:
+                
+                # remove leading whitespace, but also store the whitespace to add back later
+                white_space = code[i][:code[i].index(code[i].lstrip())]
+                line = code[i].lstrip()
+
+                # name of variable is in between first space and next space
+                if "=" in line:
+                    name = f"{line[line.index(' '):line.index(' ', line.index('=')-1)]}".strip()
+                    # replace 'line' up to first space with const char*
+                    code[i] = white_space + 'const char*' + line[line.index(' '):]
+
+                # store the string that is assigned to the variable, minus the ; at the end
+                # string = code[i][code[i].index('"'):code[i].index(';')]
+
+                # replace all other instances of the variable name with printf, starting after current line
+                for j in range(i+1, len(code)):
+                    if f'{name}()' in code[j]:
+                        # replace the whole line with print statement
+                        code[j] = white_space + 'printf(' + r'"%s", ' + name + ');'
+                # add *
+                
+        # put it back together
+        return "\n".join(code)
