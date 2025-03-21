@@ -57,33 +57,3 @@ def extract_for_loops(tokens):
             i += 1
 
     return for_loops, modified_tokens  # return extracted loops and modified token list
-
-
-
-
-# # write the modified code to the output file specified by the user in the terminal 
-# def write_modified_code(output_path, modified_code):
-#     with open(output_path, 'w') as file:
-#         file.write(modified_code)
-
-# # main function to extract for loops from the input file and write the modified code to the output file
-# def main():
-#     if len(sys.argv) < 3:
-#         print("Usage: python for_loop_finder.py <input_file.c> <output_file.c>")
-#         sys.exit(1)
-    
-#     input_file = sys.argv[1] # c source file 
-#     output_file = sys.argv[2] # output file to write the modified code to 
-    
-#     for_loops, modified_code = extract_for_loops(input_file)
-    
-#     print("Extracted for loops:")
-#     for loop in for_loops:
-#         print("For loop contents:")
-#         print(loop, "\n")
-    
-#     write_modified_code(output_file, modified_code)
-#     print(f"Modified C file saved to {output_file}")
-
-# if __name__ == "__main__":
-#     main()
