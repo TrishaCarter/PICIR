@@ -1,6 +1,7 @@
 
 import lexer
 import normalizer
+import for_loop_finder
 
 
 """
@@ -53,10 +54,13 @@ if __name__ == '__main__':
             break
         i += 1
 
+    contents = [x.token for x in contents]
+    
     print("Main function contents")
     print(contents)
+    
 
     # find eligible for loops
-            
+    for_loops = for_loop_finder.extract_for_loops(contents)
 
 
