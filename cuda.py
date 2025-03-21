@@ -12,9 +12,11 @@ Cuda process:
     * no continues, breaks, or jumps allowed
     * check for data dependencies
 3. Get a list of everything that needs to be allocated for the gpu
-5. Replace the for loop with allocation, copying, invocation, copying, and deallocation
-6. Create device function
+4. Replace the for loop with allocation, copying, invocation, copying, and deallocation
+5. Create device function
 """
+
+
 
 
 if __name__ == '__main__':
@@ -56,7 +58,7 @@ if __name__ == '__main__':
     print("Main function contents")
     print(contents)
 
+
     # find eligible for loops
             
-
 
