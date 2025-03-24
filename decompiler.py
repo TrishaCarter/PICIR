@@ -2,7 +2,8 @@
 
 # Made into a class in case we want to make more than C code in the future 
  
-# TODO: Pointer Arithmetic and More Print Statements
+# TODO: Pointer Arithmetic?
+# TODO: implementing unions & structs - maybe depending on cuda
 
 IS_MAIN = False
 
@@ -11,15 +12,13 @@ class IRToCDecompiler:
         self.function = function
         self.types = types
         self.libraries = libraries
+        self.external_vars = external_vars
 
         # These libraries are needed for platform independent code
         self.libraries.append("#include <stdint.h>")
         # self.libraries.append("#include <stddef.h>")
         # self.libraries.append("#include <stdbool.h>")
         # self.libraries.append("#include <float.h>")
-
-        self.external_vars = external_vars
-
 
     # generate the full C code
     def generate_c_code(self):
@@ -69,6 +68,8 @@ class IRToCDecompiler:
     
     def handle_tokens(self):
         c_code = []
+        
+        token_iter = iter(self.function.tokens)
 
         i = 0
         while i < len(self.function.tokens):
@@ -95,7 +96,7 @@ class IRToCDecompiler:
                         break
                     return_statement += f" {return_token}"
                 c_code.append(return_statement)
-                
+            
             else:
                 c_code.append(self.handle_operations(token, i))
                 
@@ -139,16 +140,20 @@ class IRToCDecompiler:
                     tok, i = self.handle_operations(token, i)
                     block.append(tok)
 
-            for i in range(len(block)):
+            for i in range(len(block)):            
                 if isinstance(block[i], list):
                     block[i] = ' '.join(block[i])
             return block, i
 
         # collect list of next tokens from  "(" to ")"
         if check_if:
-            i += 1
-            token = self.function.tokens[i]
-            condition = self.handle_variables(token)[0]
+
+            condition = self.handle_variables(next(token_iter, None))[0]
+            # There are not parantheses now?
+
+#             i += 1
+#             token = self.function.tokens[i]
+#             condition = self.handle_variables(token)[0]
             # There are not parantheses now
             # condition_list = []
             # while True:
@@ -171,13 +176,20 @@ class IRToCDecompiler:
             if_block = ["if (" + condition  + ")"  + the_next]
 
         if not check_if:
+            # string_block = "else"
             if_block = ["else" + next(token_iter)]
+            # if next(token_iter) == "}":
+            #     if_block  = []
+            # else:
+            #     if_block.append(next(token_iter))
+            # print("if_block "+str(if_block))
         
         # for each in block, append new line to if_block as string
         parse_block = parse_block()
         string_block = ""
         for line in parse_block:
             string_block += f"\t{line}\n"
+
         if_block.append(string_block)
         
         return if_block
@@ -195,6 +207,7 @@ class IRToCDecompiler:
                 if token == ";":
                     break
                 elif token.startswith("#"):
+
                     var_name, _ = self.handle_variables(token)
                     right_tokens.append(var_name)
                 elif token == "access":
@@ -215,6 +228,14 @@ class IRToCDecompiler:
             if left_var_type == "":
                 return f"{left_var} = {' '.join(right_tokens)};"
             return f"{left_var_type} {left_var} = {''.join(right_tokens)};"
+        
+        # labels
+        elif operator == ":":
+        
+            return f"{left_var}{operator}" + " {}"
+        
+        elif operator == ";":
+            return f"{left_var_type} {left_var}{operator}"
         
         elif operator == "+" or operator == "-" or operator == "%" or operator == "^" or operator == "&" or operator == "|" or operator == "*" or operator == "/" or operator == ">>" or operator == "<<":
             right_var = next(token_iter)
@@ -261,12 +282,12 @@ class IRToCDecompiler:
             return f"{left_var} = *{next(token_iter)};"
         
         elif operator == "call":
-            func_name, _ = self.handle_variables(next(token_iter))
+            func_name = self.external_vars.get(first_token)
             args = []
             while (arg := next(token_iter)) != ";":
-                args.append(arg)
-            return f"{left_var} = {func_name}({', '.join(args)});"
-
+                arg_name, _ = self.handle_variables(arg)
+                args.append(arg_name)
+            return f"{func_name}({', '.join(args)});"
         
         # union/structs 
         # not sure how these will be structured for input
@@ -279,19 +300,22 @@ class IRToCDecompiler:
         elif operator == "bitnot":
             # remove the zero, I suppose. Also need to figure how how the bitnot will be structured
             return f"{left_var} = ~{next(token_iter)};"
-
-        elif operator == "goto":
-            return f"{operator} {next(token_iter)};"
         
-        elif operator and operator.split()[0] == "@":
-            return f"{next(token_iter, None)} {next(token_iter, None)}/n"
+        # elif operator.count("@") > 0:
+        #     label, _ = self.handle_variables(operator)
+        #     return f"{label}:"
+
+        elif first_token == "goto":
+            label, _ = self.handle_variables(operator)
+            return f"{first_token} {label}{next(token_iter)}"
         
         else:
-            return ""  # TODO: Handle any other cases that arise
+            return ""
 
     # Map an IR variable (e.g., #1) to a C variable name and type
     def handle_variables(self, var):
         var_name = f"var{var[1:]}"
+        # print(var)
         var_type = f"{self.types.get(var)}"
         return_var_type = ""
 
@@ -350,10 +374,18 @@ class IRToCDecompiler:
     # go through the code to replace function calls with their respective function names
         code = code.split("\n")
 
-        for i in range(len(code)):
+
+        for i in range(len(code)-5):
             # store names of variables assigned strings and replace any calls of that name with printf
+            if code[i].count('else{') > 0 and code[i+1].count('}') > 0:
+
+                # remove this and next two indexes
+                code.pop(i+2)
+                code.pop(i+1)
+                code.pop(i)
+            
             if '"' in code[i]:
-                
+                # dont come for me for this please, if I think of a better way I will change it
                 # remove leading whitespace, but also store the whitespace to add back later
                 white_space = code[i][:code[i].index(code[i].lstrip())]
                 line = code[i].lstrip()
@@ -363,16 +395,6 @@ class IRToCDecompiler:
                     name = f"{line[line.index(' '):line.index(' ', line.index('=')-1)]}".strip()
                     # replace 'line' up to first space with const char*
                     code[i] = white_space + 'const char*' + line[line.index(' '):]
-
-                # store the string that is assigned to the variable, minus the ; at the end
-                # string = code[i][code[i].index('"'):code[i].index(';')]
-
-                # replace all other instances of the variable name with printf, starting after current line
-                for j in range(i+1, len(code)):
-                    if f'{name}()' in code[j]:
-                        # replace the whole line with print statement
-                        code[j] = white_space + 'printf(' + r'"%s", ' + name + ');'
-                # add *
                 
         # put it back together
         return "\n".join(code)
