@@ -71,16 +71,14 @@ class IRToCDecompiler:
         
         token_iter = iter(self.function.tokens)
 
-        i = 0
-        while i < len(self.function.tokens):
-            token = self.function.tokens[i]
+        for token in token_iter:
 
             if token == "if":
-                if_block, i = self.handle_if_else(i)
+                if_block = self.handle_if_else(token_iter)
                 for line in if_block:
                     c_code.append(line)
             elif token == "else":
-                else_block, i = self.handle_if_else(i, check_if=False)
+                else_block = self.handle_if_else(token_iter, check_if=False)
                 for line in else_block:
                     c_code.append(line)
 
@@ -89,8 +87,7 @@ class IRToCDecompiler:
 
                 # until token ";" is found, append to return statement 
                 while True:
-                    i += 1
-                    return_token = self.function.tokens[i]
+                    return_token = next(token_iter, None)
                     if return_token == ";":
                         return_statement += f"{return_token}"
                         break
@@ -98,18 +95,16 @@ class IRToCDecompiler:
                 c_code.append(return_statement)
             
             else:
-                c_code.append(self.handle_operations(token, i))
+                c_code.append(self.handle_operations(token, token_iter))
                 
-            i += 1
 
         return c_code
 
-    def handle_if_else(self, i, check_if=True):
+    def handle_if_else(self, token_iter, check_if=True):
         def parse_block():
             block = []
             while True:
-                i += 1
-                token = self.function.tokens[i]
+                token = next(token_iter, None)
                 if token is None:
                     break
 
@@ -118,18 +113,14 @@ class IRToCDecompiler:
                     break
                 
                 elif token == "if":
-                    tok, i = self.handle_if_else(i)
-                    block.append(tok)  
+                    block.append(self.handle_if_else(token_iter))  
                 elif token == "else":
-                    i += 1
-                    next_token = self.function.tokens[i]
-                    block.append(token + next_token)
+                    block.append(token + next(token_iter))
                     block.append(parse_block())
                 elif token == "return":
                     return_tokens = "return"
                     while True:
-                        i += 1
-                        next_token = self.function.tokens[i]
+                        next_token = next(token_iter, None)
                         if next_token == ";":
                             return_tokens += f"{next_token}"
                             break
@@ -137,24 +128,17 @@ class IRToCDecompiler:
                             return_tokens += f" {next_token}"
                     block.append(return_tokens)
                 else:
-                    tok, i = self.handle_operations(token, i)
-                    block.append(tok)
+                    block.append(self.handle_operations(token, token_iter))
 
             for i in range(len(block)):            
                 if isinstance(block[i], list):
                     block[i] = ' '.join(block[i])
-            return block, i
+            return block
 
         # collect list of next tokens from  "(" to ")"
         if check_if:
-
             condition = self.handle_variables(next(token_iter, None))[0]
             # There are not parantheses now?
-
-#             i += 1
-#             token = self.function.tokens[i]
-#             condition = self.handle_variables(token)[0]
-            # There are not parantheses now
             # condition_list = []
             # while True:
             #     token = next(token_iter, None)
@@ -170,10 +154,7 @@ class IRToCDecompiler:
             #     condition_list[1] = self.handle_variables(variable)[0]
             #     condition = ' '.join(condition_list)
             
-            i += 1
-            the_next = self.function.tokens[i]
-
-            if_block = ["if (" + condition  + ")"  + the_next]
+            if_block = ["if (" + condition  + ")"  + next(token_iter)]
 
         if not check_if:
             # string_block = "else"
