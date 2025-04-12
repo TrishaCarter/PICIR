@@ -577,4 +577,12 @@ class FuncToken(Token):
 
 
 
+class FunctionCall(Token):
+    """
+    Special Token that is a replacement for a function call
+    """
+    def __init__(self, value): 
+        Token.__init__(self, "#FUNCCALL", "", 0)
+        self.value = value
+
 

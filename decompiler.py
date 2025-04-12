@@ -11,7 +11,7 @@ def get_type(toks:list[Token]):
         if tok == "#TYPE":
             result += tok.value
         elif tok in ["#STRUCT", "#UNION", "#ENUM"]:
-            result += get_type([tok.value])
+            result += [f"{tok[1:].lower()} {tok.name}"]
         else:
             result.append(tok)
 
@@ -75,7 +75,8 @@ class IRToCDecompiler:
                     elif TOKEN_VARIABLE() == tok:
                         if tok not in used_already:
                             # TODO: fix this to use actual type
-                            new_tokens.append("int")
+                            if hasattr(tok, "type"):
+                                new_tokens += get_type([tok.type])
                         used_already.add(tok)
                         new_tokens.append("var" + tok[1:])
                     elif tok == "access":
@@ -85,11 +86,47 @@ class IRToCDecompiler:
                         new_tokens.append("]")
                         continues = 1
                         continue
+                    elif tok == "#FUNCCALL":
+                        # handle call
+                        tok.value[0] = tok.value[0].original
+                        for j in range(1, len(tok.value)):
+                            if TOKEN_VARIABLE() == tok.value[j]:
+                                tok.value[j] = "var" + tok.value[j][1:]
+                        new_tokens += tok.value
                     else:
                         new_tokens.append(tok)
                         
-                    # TODO: handle call
             i += 1
+
+        print(new_tokens)
+
+        # handle comma separated tokens
+        i = len(new_tokens)-1
+        while i-3 >= 0:
+            if new_tokens[i] == "," and new_tokens[i-2] == "=":
+                # TODO: replace all occurances of i-3 with i-1,i+1
+                replacement = [new_tokens[i-1], ",", new_tokens[i+1]]
+                search_term = new_tokens[i-3]
+
+                del new_tokens[i-3]
+                del new_tokens[i-3]
+                del new_tokens[i-3]
+                del new_tokens[i-3]
+                del new_tokens[i-3]
+                del new_tokens[i-3]
+                i -= 3
+
+                print(f"Search: {search_term}\tReplace: {replacement}")
+                j = i
+                while j < len(new_tokens):
+                    if new_tokens[j] == search_term:
+                        del new_tokens[j]
+                        for x in reversed(replacement):
+                            new_tokens.insert(j, x)
+                    j += 1
+
+                continue
+            i -= 1
 
         print("New Tokens:")
         print(new_tokens)
