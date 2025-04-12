@@ -47,6 +47,7 @@ class IRToCDecompiler:
                         new_tokens += get_type([tok])
                     else:
                         new_tokens.append(tok)
+                new_tokens.append(";")
                 new_tokens.append("\n")
             elif tokens[i] == "#FUNC":
                 # handle functions
@@ -93,6 +94,12 @@ class IRToCDecompiler:
                             if TOKEN_VARIABLE() == tok.value[j]:
                                 tok.value[j] = "var" + tok.value[j][1:]
                         new_tokens += tok.value
+                    elif len(tok) > 0 and tok[0] == "@":
+                        # handle labels
+                        new_tokens.append("label_" + tok[1:])
+                    elif tok == ":":
+                        new_tokens[-1] += ":"
+                        new_tokens.append("\n")
                     else:
                         new_tokens.append(tok)
                         
@@ -104,7 +111,7 @@ class IRToCDecompiler:
         i = len(new_tokens)-1
         while i-3 >= 0:
             if new_tokens[i] == "," and new_tokens[i-2] == "=":
-                # TODO: replace all occurances of i-3 with i-1,i+1
+                # replace all occurances of i-3 with i-1,i+1
                 replacement = [new_tokens[i-1], ",", new_tokens[i+1]]
                 search_term = new_tokens[i-3]
 
