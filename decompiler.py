@@ -76,8 +76,7 @@ class IRToCDecompiler:
                     elif TOKEN_VARIABLE() == tok:
                         if tok not in used_already:
                             # TODO: fix this to use actual type
-                            if hasattr(tok, "type"):
-                                new_tokens += get_type([tok.type])
+                            new_tokens.append("int")
                         used_already.add(tok)
                         new_tokens.append("var" + tok[1:])
                     elif tok == "access":
