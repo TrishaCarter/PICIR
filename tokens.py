@@ -297,6 +297,17 @@ class Tokens:
             result -= 1
         return result + 1
 
+
+    def get_line_end(self, index):
+        """
+        get the index of the last token of this line
+        """
+        result = index
+        while result < len(self.tokens):
+            if self.tokens[result] == ";":
+                return result
+            result += 1
+        return result - 1
     
     def find_next(self, index, closer):
         """
@@ -584,5 +595,15 @@ class FunctionCall(Token):
     def __init__(self, value): 
         Token.__init__(self, "#FUNCCALL", "", 0)
         self.value = value
+
+
+class TypeHandler(Token):
+    """
+    Special Token that holds all types for global usage
+    """
+    def __init__(self, value):
+        Token.__init__(self, "#TYPEHANDLER", "", 0)
+        self.value = value
+
 
 

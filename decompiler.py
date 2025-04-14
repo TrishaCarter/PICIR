@@ -29,6 +29,55 @@ class IRToCDecompiler:
         for lib in libraries:
             c_code += f"#include \"{lib}\"\n"
 
+        # handle tokens that have no type
+        subsitutions = {}
+        i = 0
+        n = len(tokens)
+        while i < n:
+            if tokens[i] == "#FUNC":
+                j = 0
+                m = len(tokens[i].value)
+                while j < m:
+                    # if this is a variable without a type,
+                    # substitute its value wherever it appears
+                    print(tokens[i].value[j], subsitutions)
+                    if tokens[i].value[j] == "#FUNCCALL":
+                        k = 0
+                        while k < len(tokens[i].value[j].value):
+                            if tokens[i].value[j].value[k] in subsitutions:
+                                replacement = subsitutions[tokens[i].value[j].value[k]]
+                                del tokens[i].value[j].value[k]
+                                for x in reversed(replacement):
+                                    tokens[i].value[j].value.insert(k, x)
+                            k += 1
+
+                    elif TOKEN_VARIABLE() == tokens[i].value[j] and tokens[i].value[j].token in subsitutions:
+                        print(f"Making substitution: {tokens[i].value[j]}")
+                        del tokens[i].value[j]
+                        m -= 1
+                        replacement = subsitutions[tokens[i].value[j].token]
+                        print(f"Replacement: {tokens[i].value[j]}")
+                        for x in reversed(replacement):
+                            tokens[i].value.insert(j, x)
+                        j += len(replacement)
+                        m += len(replacement)
+                        continue
+                    elif TOKEN_VARIABLE() == tokens[i].value[j]:
+                        if not hasattr(tokens[i].value[j], "type") or tokens[i].value[j].type is None:
+                            if j > 0 and j + 1 < m and tokens[i].value[j-1] != "." and tokens[i].value[j+1] == "=":
+                                line_end = Tokens(tokens[i].value).get_line_end(j+1)
+                                the_value = tokens[i].value[j+2:line_end]
+                                subsitutions[tokens[i].value[j].token] = the_value
+                                print(f"New Sub: {tokens[i].value[j].token} -> {the_value}")
+                                while line_end >= j:
+                                    del tokens[i].value[j]
+                                    line_end -= 1
+                                    m -= 1
+                                j -= 1
+                    j += 1
+            i += 1
+
+
         # handle structs, unions, and enums
         # handle the types of variables
         # convert names variables to real names
