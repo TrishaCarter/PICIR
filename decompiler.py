@@ -80,6 +80,13 @@ class IRToCDecompiler:
                         del func[j-1]
                         m -= 1
                         func[j].token = "*"
+                    elif func[j] == "access":
+                        func[j].token = "["
+                        if func[j+1] == "(":
+                            func.insert(j+4, Token("]", "", 0))
+                        else:
+                            func.insert(j+2, Token("]", "", 0))
+                        m += 1
                     j += 1
             i += 1
 
@@ -94,23 +101,23 @@ class IRToCDecompiler:
         n = len(tokens)
         while i < n:
             if tokens[i] in ["#STRUCT", "#UNION", "#ENUM"]:
-                new_tokens += [str(tokens[i])[1:].lower()] 
+                new_tokens.tokens += [str(tokens[i])[1:].lower()] 
                 if tokens[i].name is not None:
                     new_tokens.append(tokens[i].name)
                 for tok in tokens[i].original_value:
                     if tok in ["#STRUCT", "#UNION", "#ENUM", "#TYPE"]:
-                        new_tokens += get_type([tok])
+                        new_tokens.tokens += get_type([tok])
                     else:
                         new_tokens.append(tok)
                 new_tokens.append(";")
                 new_tokens.append("\n")
             elif tokens[i] == "#FUNC":
                 # handle functions
-                new_tokens += tokens[i].return_type.value
+                new_tokens.tokens += tokens[i].return_type.value
                 new_tokens.append(tokens[i].name)
                 for arg in tokens[i].args:
                     if arg == "#TYPE":
-                        new_tokens += arg.value
+                        new_tokens.tokens += arg.value
                     elif TOKEN_VARIABLE() == arg:
                         used_already.add(arg)
                         new_tokens.append("var" + arg[1:])
@@ -130,27 +137,20 @@ class IRToCDecompiler:
                         continue
                     elif TOKEN_VARIABLE() == tok:
                         if tok not in used_already:
-                            if hasattr(tok, "type") and tok.type is not None:
-                                new_tokens += get_type([tok.type])
+                            if hasattr(tok, "type") and tok.type is not None and len(tok.type) != 0:
+                                new_tokens.tokens += get_type([tok.type])
                             else: 
                                 print("NO TYPE")
                                 new_tokens.append(string_to_token("long"))
                         used_already.add(tok)
                         new_tokens.append("var" + tok[1:])
-                    elif tok == "access":
-                        # handle access
-                        new_tokens.append("[")
-                        new_tokens.append("0")
-                        new_tokens.append("]")
-                        continues = 1
-                        continue
                     elif tok == "#FUNCCALL":
                         # handle call
                         tok.value[0] = tok.value[0].original
                         for j in range(1, len(tok.value)):
                             if TOKEN_VARIABLE() == tok.value[j]:
                                 tok.value[j] = "var" + tok.value[j][1:]
-                        new_tokens += tok.value
+                        new_tokens.tokens += tok.value
                     elif len(tok) > 0 and tok[0] == "@":
                         # handle labels
                         new_tokens.append("label_" + tok[1:])
@@ -162,8 +162,10 @@ class IRToCDecompiler:
             else:
                 # normal token in global scope
                 if TOKEN_VARIABLE() == tokens[i]:
-                    if hasattr(tokens[i], "type") and tokens[i].type is not None:
-                        new_tokens += get_type([tokens[i].type])
+                    if hasattr(tokens[i], "type") and tokens[i].type is not None and len(tokens[i].type) != 0:
+                        the_type = get_type([tokens[i].type])
+                        print(the_type)
+                        new_tokens.tokens += the_type
                     new_tokens.append("var" + tokens[i].token[1:])
                 else:
                     new_tokens.append(tokens[i])
@@ -171,6 +173,7 @@ class IRToCDecompiler:
                         
             i += 1
 
+        print("After struct, union, type")
         print(new_tokens)
 
         # handle comma separated tokens
@@ -201,19 +204,48 @@ class IRToCDecompiler:
                 continue
             i -= 1
 
+        print("After comma separated")
+        print(new_tokens)
 
         # handle tokens that have no type
         subsitutions = {}
         seen_already = set()
+
+        type_tokens = set(["*", "int", "short", "signed", "unsigned", "float", "double", "long", "size_t", "ssize_t", "clock_t", "void", "char"])
+
         i = 0
         n = len(new_tokens)
         while i < n:
-            if new_tokens[i].token[0:3] == "var":
-                if new_tokens[i].token in seen_already:
+            if new_tokens[i][0:3] == "var":
+                the_var = new_tokens[i]
+
+                if new_tokens[i] in seen_already:
+                    if new_tokens[i] in subsitutions:
+                        # replace with the subsitutions
+                        del new_tokens[i]
+                        n -= 1
+                        new_tokens.insert_all(i, subsitutions[the_var])
+                        n = len(new_tokens)
+                    else:
+                        i += 1
+                    continue
+
+                if i > 0 and new_tokens[i-1] in type_tokens:
+                    seen_already.add(new_tokens[i])
                     i += 1
                     continue
-                endline = new_tokens.get_
-                sub = new_tokens[i+2:endline]
+
+                del new_tokens[i]
+                n -= 1
+
+                if new_tokens[i] == "=":
+                    endline = new_tokens.get_line_end(i)
+                    sub = new_tokens[i+1:endline]
+                    for j in range(i, endline):
+                        del new_tokens[i]
+                        n -= 1
+
+                    subsitutions[the_var] = sub
 
             i += 1
 
