@@ -137,11 +137,11 @@ class IRToCDecompiler:
                         continue
                     elif TOKEN_VARIABLE() == tok:
                         if tok not in used_already:
-                            if hasattr(tok, "type") and tok.type is not None and len(tok.type) != 0:
+                            if hasattr(tok, "type") and tok.type is not None and len(tok.type) != 0 and not (len(tok.type) == 1 and tok.type[0] == ""):
                                 new_tokens.tokens += get_type([tok.type])
                             else: 
                                 print("NO TYPE")
-                                new_tokens.append(string_to_token("long"))
+                                # new_tokens.append(string_to_token("long"))
                         used_already.add(tok)
                         new_tokens.append("var" + tok[1:])
                     elif tok == "#FUNCCALL":
@@ -165,7 +165,8 @@ class IRToCDecompiler:
                     if hasattr(tokens[i], "type") and tokens[i].type is not None and len(tokens[i].type) != 0:
                         the_type = get_type([tokens[i].type])
                         print(the_type)
-                        new_tokens.tokens += the_type
+                        if not(len(the_type) == 1 and the_type[0] == ""):
+                            new_tokens.tokens += the_type
                     new_tokens.append("var" + tokens[i].token[1:])
                 else:
                     new_tokens.append(tokens[i])
@@ -216,6 +217,7 @@ class IRToCDecompiler:
         i = 0
         n = len(new_tokens)
         while i < n:
+            print(new_tokens[i])
             if new_tokens[i][0:3] == "var":
                 the_var = new_tokens[i]
 
@@ -235,6 +237,8 @@ class IRToCDecompiler:
                     i += 1
                     continue
 
+                seen_already.add(new_tokens[i])
+
                 del new_tokens[i]
                 n -= 1
 
@@ -246,6 +250,7 @@ class IRToCDecompiler:
                         n -= 1
 
                     subsitutions[the_var] = sub
+                    print(f"Added substitution: {the_var} -> {sub}")
 
             i += 1
 
