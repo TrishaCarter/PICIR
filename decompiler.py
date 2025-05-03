@@ -77,13 +77,24 @@ class IRToCDecompiler:
                             func.insert(j, x)
                         m = len(func)
                     elif func[j] == "ref":
+                        func[j].token = "*"
                         del func[j-1]
                         m -= 1
-                        func[j].token = "*"
+                        j -= 1
                     elif func[j] == "access":
                         func[j].token = "["
                         if func[j+1] == "(":
-                            func.insert(j+4, Token("]", "", 0))
+                            paren_count = 1
+                            k = j + 2
+                            while k < m:
+                                if func[k] == "(":
+                                    paren_count += 1
+                                elif func[k] == ")":
+                                    paren_count -= 1
+                                    if paren_count == 0:
+                                        break
+                                k += 1
+                            func.insert(k+1, Token("]", "", 0))
                         else:
                             func.insert(j+2, Token("]", "", 0))
                         m += 1
@@ -244,7 +255,7 @@ class IRToCDecompiler:
 
                 if new_tokens[i] == "=":
                     endline = new_tokens.get_line_end(i)
-                    sub = new_tokens[i+1:endline]
+                    sub = [string_to_token("(")] + new_tokens[i+1:endline] + [string_to_token(")")]
                     for j in range(i, endline):
                         del new_tokens[i]
                         n -= 1
