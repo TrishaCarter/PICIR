@@ -1,2 +1,2 @@
 # PICIR
-Compiler that converts Internal Representation to Platform Independent C code
+Compiler that converts Intermediate Representation to Platform Independent C code
